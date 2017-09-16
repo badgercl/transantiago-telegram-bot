@@ -5,7 +5,7 @@ require_once("../config.php");
 $m = tgparseinput();
 if(!$m) httpdie(400, "1");
 
-error_log(json_encode($m));
+//error_log(json_encode($m));
 $db = DbConfig::getConnection();
 
 if(isset($m['from']) && (!isset($m['text']) || strpos(strtolower($m['text']), '/start') !== 0 )){
@@ -28,9 +28,10 @@ if(isset($m['text'])){
 	else if(strpos(strtolower($text), '/') === 0){
  	 	parsecmd($m, $token);
 	}
-	else {
-		parsecmd($m,$token);
+	else if(strpos(strtolower($text), 'paradero') === 0){
+		return;
 	}
+	else parsecmd($m,$token);
 }
 else if(isset($m['location'])){
 	tgchat_action("typing",$m['chat']['id'], $token);
@@ -42,6 +43,15 @@ else if(isset($m['location'])){
 	$msg = "Encontré estas paradas";
 	tgshow_options($msg, $paradas, $m['chat']['id'], $token);
 	savegeo($m, $db);
+}
+else if(isset($m['query']) && strlen($m['query'])>2 ){
+	$stop = get_stop($m['query']);
+	if(!$stop) return;
+	$str = make_text($stop);		
+	$arr = [
+	['title' => "Paradero ".$stop['descripcion'], 'msg' => $str],
+	];
+	tgshowoptions($arr,$m['id'], $token);	
 }
 
 function request_geo($m, $token){
@@ -91,24 +101,67 @@ function get_paradas($m, $mapstoken){
 	return $out;
 }
 
+function get_stop($stop){
+	$url = "http://dev.adderou.cl/transanpbl/busdata.php?paradero=".$stop;
+	$res = file_get_contents($url);
+	if(!$res){
+        return NULL;
+    }
+	$json = json_decode($res, TRUE);
+	if($json['id'] === "NULL"){
+		return NULL;
+	}
+	return $json;
+}
+
+function make_text($json){
+	$servicios = $json['servicios'];
+	$out = [];
+	foreach($servicios as $s){
+		if($s['valido'] == 0){
+			if(!isset($out[$s['descripcionError']])) $out[$s['descripcionError']] = [];
+				$out[$s['descripcionError']][] = $s;
+			}
+			else{
+				if(!isset($s['tiempo'])) continue;
+				$t= trim($s['tiempo']);
+				if(!isset($out[$t])) $out[$t] = [];
+				$out[$t][] = $s;
+			}
+	}
+	//$str = "Paradero ".$json['descripcion']."\n";
+	$str = "";
+	foreach($out as $key => $val){
+		$str .= $key;
+		$str .= " servicios <b>";
+		foreach($val as $s){
+			if($s['valido'] == 0) $str .= $s['servicio'].', ';
+			else $str .= $s['servicio'].' (a '.$s['distancia'].'), ';
+		}
+		$str = substr($str,0,strlen($str)-2);
+		$str .= "</b>\n";
+	}
+	if(strlen($str) == 0) $str = "No hay buses que se dirijan al paradero";
+	$str = "Paradero ".$json['descripcion']."\n".$str;
+	return $str;
+}
+
 function parsecmd($m, $token){
 	tgchat_action("typing", $m['chat']['id'], $token);
 	$text = trim(str_replace("@cuantofalta_bot","",$m['text']));
-	$parada = get_cmd($text);
-	if(!$parada) return;
+	$stop = get_cmd($text);
+	if(!$stop) return;
 	$db = DbConfig::getConnection();
-	save($parada, $m, $db);
-	$url = "http://dev.adderou.cl/transanpbl/busdata.php?paradero=".$parada;
-	$res = file_get_contents($url);
-	if(!$res){
-		return;
-	}
-	$json = json_decode($res, TRUE);
-	if($json['id'] === "NULL"){
-		$msg = "No existe la parada ".$parada;
+	save($stop, $m, $db);
+	//$url = "http://dev.adderou.cl/transanpbl/busdata.php?paradero=".$parada;
+	//$res = file_get_contents($url);
+	$json = get_stop($stop);
+	if(!$json){
+		$msg = "No existe la parada ".$stop;
 		if($m['chat']['id'] == $m['from']['id']) tgsend_msg($msg, $m['chat']['id'], $token);
 		return;
 	}
+	/*
 	$servicios = $json['servicios'];
 	$out = [];
 	foreach($servicios as $s){
@@ -135,6 +188,8 @@ function parsecmd($m, $token){
 		$str .= "</b>\n";
 	}
 	if(strlen($str) == 0) $str = "No hay buses que se dirijan al paradero";
+	*/
+	$str = make_text($json);
 	tgsend_msg($str, $m['chat']['id'], $token);
 }
 

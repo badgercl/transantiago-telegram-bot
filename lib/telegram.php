@@ -9,6 +9,7 @@ function tgparseinput(){
 	$m = $json;
 	if(isset($json['message'])) $m = $json['message'];
 	else if(isset($json['location'])) $m = $json;
+	else if(isset($json['inline_query'])) $m = $json['inline_query'];
 	return $m;
 }
 
@@ -28,7 +29,7 @@ function tgstart($msg, $m, $db, $token, $start){
 	}
   if(count($res)==0){
     $sql = "INSERT INTO tg_users (uid, first_name, last_name, username, language_code, start) VALUES ('$uid', '$first_name', '$last_name', '$username', '$language_code'," . ($start?1:0) . ")";
-	error_log($sql);
+	//error_log($sql);
     if(!DbConfig::update($db, $sql)) {
 		error_log($sql);
 		error_log($db->error);
@@ -81,3 +82,22 @@ function tgchat_action($action, $uid, $token){
 	file_get_contents($cmd);	
 }
 
+function tgshowoptions($options, $qid, $token){
+	$res = [];
+	foreach($options as $o){
+		$rid = md5($qid . 
+	$o['title'] . 
+$o['msg']);
+		$res[] = [
+			'type' => 'article',
+		'id' => $rid,
+		'title' => $o['title'],
+		'input_message_content' => ['message_text'=>$o['msg'], 'parse_mode' => 'HTML']
+		];
+	}
+	$results = urlencode(json_encode($res));
+	error_log(print_r(json_encode($res), TRUE));
+	$cmd = "https://api.telegram.org/bot$token/answerInlineQuery?inline_query_id=$qid&results=$results";
+ 	//error_log($cmd);
+    $res = file_get_contents($cmd);
+}
