@@ -33,6 +33,15 @@ if(isset($m['text'])){
 	}
 	else parsecmd($m,$token);
 }
+else if(isset($m['query']) && strlen($m['query'])>2 ){
+    $stop = get_stop($m['query']);
+    if(!$stop) return;
+    $str = make_text($stop);
+    $arr = [
+    ['title' => "Paradero ".$stop['id'].' - '.$stop['descripcion'], 'msg' => $str],
+    ];
+    tgshowoptions($arr,$m['id'], $token);
+}
 else if(isset($m['location'])){
 	tgchat_action("typing",$m['chat']['id'], $token);
 	if(!check_location($m,$mapstoken)){
@@ -43,15 +52,6 @@ else if(isset($m['location'])){
 	$msg = "Encontré estas paradas";
 	tgshow_options($msg, $paradas, $m['chat']['id'], $token);
 	savegeo($m, $db);
-}
-else if(isset($m['query']) && strlen($m['query'])>2 ){
-	$stop = get_stop($m['query']);
-	if(!$stop) return;
-	$str = make_text($stop);		
-	$arr = [
-	['title' => "Paradero ".$stop['descripcion'], 'msg' => $str],
-	];
-	tgshowoptions($arr,$m['id'], $token);	
 }
 
 function request_geo($m, $token){
@@ -142,7 +142,7 @@ function make_text($json){
 		$str .= "</b>\n";
 	}
 	if(strlen($str) == 0) $str = "No hay buses que se dirijan al paradero";
-	$str = "Paradero ".$json['descripcion']."\n".$str;
+	$str = "Paradero ".$json['id']. ' - ' .$json['descripcion']."\n".$str;
 	return $str;
 }
 
